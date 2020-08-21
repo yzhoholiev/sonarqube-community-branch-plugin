@@ -21,6 +21,8 @@ package com.github.mc1arke.sonarqube.plugin.ce.pullrequest.gitlab;
 import com.github.mc1arke.sonarqube.plugin.ce.pullrequest.AnalysisDetails;
 import com.github.mc1arke.sonarqube.plugin.ce.pullrequest.PostAnalysisIssueVisitor;
 import com.github.tomakehurst.wiremock.junit.WireMockRule;
+import com.google.common.net.HttpHeaders;
+
 import org.junit.Rule;
 import org.junit.Test;
 import org.mockito.Mockito;
@@ -149,7 +151,9 @@ public class GitlabServerPullRequestDecoratorTest {
 
         wireMockRule.stubFor(post(urlPathEqualTo("/api/v4/projects/" + urlEncode(repositorySlug) + "/merge_requests/" + branchName + "/discussions"))
                 .withRequestBody(equalTo("body=summary"))
-                .willReturn(created()));
+                .willReturn(created()
+                        .withHeader(HttpHeaders.CONTENT_TYPE, "application/json")
+                        .withBody("{\"id\": \"6a9c1750b37d513a43987b574953fceb50b03ce7\"}")));
 
         wireMockRule.stubFor(post(urlPathEqualTo("/api/v4/projects/" + urlEncode(repositorySlug) + "/merge_requests/" + branchName + "/discussions"))
                 .withRequestBody(equalTo("body=issue&" +
@@ -160,7 +164,9 @@ public class GitlabServerPullRequestDecoratorTest {
                         urlEncode("position[new_path]") + "=" + urlEncode(filePath) + "&" +
                         urlEncode("position[new_line]") + "=" + lineNumber + "&" +
                         urlEncode("position[position_type]") + "=text"))
-                .willReturn(created()));
+                .willReturn(created()
+                        .withHeader(HttpHeaders.CONTENT_TYPE, "application/json")
+                        .withBody("{\"id\": \"6a9c1750b37d513a43987b574953fceb50b03ce7\"}")));
 
         Server server = mock(Server.class);
         when(server.getPublicRootUrl()).thenReturn(sonarRootUrl);

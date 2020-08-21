@@ -41,6 +41,7 @@ import org.apache.http.client.entity.UrlEncodedFormEntity;
 import org.apache.http.client.methods.HttpDelete;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.methods.HttpPost;
+import org.apache.http.client.methods.HttpPut;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
 import org.apache.http.message.BasicNameValuePair;
@@ -173,7 +174,14 @@ public class GitlabServerPullRequestDecorator implements PullRequestBuildStatusD
 
             postStatus(new StringBuilder(statusUrl), headers, analysis, coverageValue);
 
-            postCommitComment(mergeRequestDiscussionURL, headers, summaryContentParams);
+            Discussion discussion = postCommitComment(mergeRequestDiscussionURL, headers, summaryContentParams);
+
+            if (analysis.getQualityGateStatus() == QualityGate.Status.OK) {
+                List<NameValuePair> resolveContentParams = Collections.singletonList(
+                        new BasicNameValuePair("resolved", "true"));
+
+                putCommitComment(mergeRequestDiscussionURL + String.format("/%s", discussion.getId()), headers, resolveContentParams);
+            }
 
             for (PostAnalysisIssueVisitor.ComponentIssue issue : openIssues) {
                 String path = analysis.getSCMPathForIssue(issue).orElse(null);
@@ -298,7 +306,7 @@ public class GitlabServerPullRequestDecorator implements PullRequestBuildStatusD
         }
     }
 
-    private void postCommitComment(String commitCommentUrl, Map<String, String> headers, List<NameValuePair> params) throws IOException {
+    private Discussion postCommitComment(String commitCommentUrl, Map<String, String> headers, List<NameValuePair> params) throws IOException {
         //https://docs.gitlab.com/ee/api/commits.html#post-comment-to-commit
         HttpPost httpPost = new HttpPost(commitCommentUrl);
         for (Map.Entry<String, String> entry : headers.entrySet()) {
@@ -311,6 +319,33 @@ public class GitlabServerPullRequestDecorator implements PullRequestBuildStatusD
         try (CloseableHttpClient httpClient = HttpClients.createSystem()) {
             HttpResponse httpResponse = httpClient.execute(httpPost);
             validateGitlabResponse(httpResponse, 201, "Comment posted");
+
+            HttpEntity entity = httpResponse.getEntity();
+            Discussion discussion = new ObjectMapper()
+                .configure(DeserializationFeature.ACCEPT_EMPTY_ARRAY_AS_NULL_OBJECT, true)
+                .configure(DeserializationFeature.ACCEPT_SINGLE_VALUE_AS_ARRAY, true)
+                .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
+                .readValue(IOUtils.toString(entity.getContent(), StandardCharsets.UTF_8), Discussion.class);
+
+            LOGGER.info("Discussion received");
+
+            return discussion;
+        }
+    }
+
+    private void putCommitComment(String commitCommentUrl, Map<String, String> headers, List<NameValuePair> params) throws IOException {
+        // https://docs.gitlab.com/ee/api/commits.html#post-comment-to-commit
+        HttpPut httpPut = new HttpPut(commitCommentUrl);
+        for (Map.Entry<String, String> entry : headers.entrySet()) {
+            httpPut.addHeader(entry.getKey(), entry.getValue());
+        }
+        httpPut.setEntity(new UrlEncodedFormEntity(params, StandardCharsets.UTF_8));
+
+        LOGGER.info("Putting {} with headers {} to {}", params, headers, commitCommentUrl);
+
+        try (CloseableHttpClient httpClient = HttpClients.createSystem()) {
+            HttpResponse httpResponse = httpClient.execute(httpPut);
+            validateGitlabResponse(httpResponse, 200, "Comment updated");
         }
     }
 
