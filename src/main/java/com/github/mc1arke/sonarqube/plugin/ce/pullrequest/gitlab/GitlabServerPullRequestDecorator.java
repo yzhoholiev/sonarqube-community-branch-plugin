@@ -173,7 +173,7 @@ public class GitlabServerPullRequestDecorator implements PullRequestBuildStatusD
 
             postStatus(new StringBuilder(statusUrl), headers, analysis, coverageValue);
 
-            postCommitComment(mergeRequestDiscussionURL, headers, summaryContentParams);
+            postCommitComment(mergeRequestDiscussionURL, headers, summaryContentParams, analysis.getQualityGateStatus() == QualityGate.Status.OK);
 
             for (PostAnalysisIssueVisitor.ComponentIssue issue : openIssues) {
                 String path = analysis.getSCMPathForIssue(issue).orElse(null);
@@ -199,7 +199,7 @@ public class GitlabServerPullRequestDecorator implements PullRequestBuildStatusD
                                 new BasicNameValuePair("position[new_line]", String.valueOf(issue.getIssue().getLine())),
                                 new BasicNameValuePair("position[position_type]", "text"));
 
-                        postCommitComment(mergeRequestDiscussionURL, headers, fileContentParams);
+                        postCommitComment(mergeRequestDiscussionURL, headers, fileContentParams, false);
                     } else {
                         LOGGER.info(String.format("Skipping %s:%d since the commit does not belong to the MR", path, issue.getIssue().getLine()));
                     }
@@ -298,8 +298,11 @@ public class GitlabServerPullRequestDecorator implements PullRequestBuildStatusD
         }
     }
 
-    private void postCommitComment(String commitCommentUrl, Map<String, String> headers, List<NameValuePair> params) throws IOException {
+    private void postCommitComment(String commitCommentUrl, Map<String, String> headers, List<NameValuePair> params, boolean isSuccessful) throws IOException {
         //https://docs.gitlab.com/ee/api/commits.html#post-comment-to-commit
+        if (isSuccessful) {
+            commitCommentUrl += "?resolved=true";
+        }
         HttpPost httpPost = new HttpPost(commitCommentUrl);
         for (Map.Entry<String, String> entry : headers.entrySet()) {
             httpPost.addHeader(entry.getKey(), entry.getValue());
